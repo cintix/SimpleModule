@@ -74,7 +74,7 @@ public class Server {
                     clientChannel.register(selector, SelectionKey.OP_READ);
                 }
 
-                if (clientSelectionKey.isConnectable()) {
+                if (clientSelectionKey.isValid()) {
                     if (clientSelectionKey.isReadable()) {
                         Client.handleRead(new ServerRequest((SocketChannel) clientSelectionKey.channel()));
                     }
