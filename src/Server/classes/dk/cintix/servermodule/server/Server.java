@@ -2,12 +2,18 @@
  */
 package dk.cintix.servermodule.server;
 
+import dk.cintix.servermodule.client.Client;
+import dk.cintix.servermodule.net.ServerRequest;
+import dk.cintix.servermodule.net.ServerResponse;
 import java.io.IOException;
 import java.lang.System.Logger;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.Iterator;
+import java.util.Set;
 
 /**
  *
@@ -15,10 +21,10 @@ import java.nio.channels.ServerSocketChannel;
  */
 public class Server {
 
-    private static final Logger LOG =  System.getLogger(Server.class.getName());
+    private static final Logger LOG = System.getLogger(Server.class.getName());
 
     private volatile boolean running = false;
-    private int port = 80;
+    private int port = 8081;
     private String host = "0.0.0.0";
 
     private SelectionKey selectionKey;
@@ -51,18 +57,45 @@ public class Server {
         running = true;
         initialize();
         LOG.log(Logger.Level.INFO, "Server starting on " + getHost() + " port " + port);
-        
-        while(!running) {
-            
+
+        while (running) {
+            LOG.log(Logger.Level.INFO, "Waiting for imcoming connection");
+            selector.select();
+
+            Set<SelectionKey> selectionKeys = selector.selectedKeys();
+            Iterator<SelectionKey> selectionKeyIterator = selectionKeys.iterator();
+
+            while (selectionKeyIterator.hasNext()) {
+                SelectionKey clientSelectionKey = selectionKeyIterator.next();
+
+                if (clientSelectionKey.isAcceptable()) {
+                    SocketChannel clientChannel = serverSocket.accept();
+                    clientChannel.configureBlocking(false);
+                    clientChannel.register(selector, SelectionKey.OP_READ);
+                }
+
+                if (clientSelectionKey.isConnectable()) {
+                    if (clientSelectionKey.isReadable()) {
+                        Client.handleRead(new ServerRequest((SocketChannel) clientSelectionKey.channel()));
+                    }
+                    if (clientSelectionKey.isWritable()) {
+                        Client.handleWrite(new ServerResponse((SocketChannel) clientSelectionKey.channel()));
+                    }
+                } else {
+                    ((SocketChannel) clientSelectionKey.channel()).close();
+                }
+
+                selectionKeyIterator.remove();
+            }
+
         }
-        
+
     }
-    
+
     public void stop() {
         running = false;
     }
-    
-    
+
     public boolean isRunning() {
         return running;
     }
@@ -87,7 +120,6 @@ public class Server {
         this.host = host;
     }
 
-    
     public static void main(String[] args) {
         try {
             new Server().start();
